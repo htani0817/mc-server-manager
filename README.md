@@ -72,7 +72,14 @@ Tailscale の MagicDNS 名（`<マシン名>.tailXXXX.ts.net`）で開きたい�
 
 ## 画面から再起動するには
 
-画面の「再起動」は、MC REST API が終了コード 75 で Java を終わらせ、systemd がそれを見て起動し直す仕組みです。tmux の中で java を動かしていると、java が終わっても tmux が残るので systemd が気づかず、起動し直されません。java を systemd から直接動かしてください。設定の例は [deploy/minecraft.service](deploy/minecraft.service) です（jar 名・メモリ・場所は自分のサーバーに合わせて直します）。
+画面の「再起動」は、MC REST API が終了コード 75 で Java を終わらせ、systemd がそれを見て起動し直す仕組みです。tmux の中で java を動かしていると、java が終わっても tmux が残るので systemd が気づかず、起動し直されません。java を systemd から直接動かしてください。設定の例は [deploy/minecraft.service](deploy/minecraft.service) と、停止に使う [deploy/mc-stop.sh](deploy/mc-stop.sh) です（jar 名・メモリ・場所は自分のサーバーに合わせて直します）。
+
+```bash
+cp minecraft.service /etc/systemd/system/minecraft.service
+cp mc-stop.sh /opt/minecraft/mc-stop.sh
+chmod 700 /opt/minecraft/mc-stop.sh
+systemctl daemon-reload
+```
 
 | | tmux の中で動かす | deploy/minecraft.service |
 | --- | --- | --- |
@@ -80,10 +87,16 @@ Tailscale の MagicDNS 名（`<マシン名>.tailXXXX.ts.net`）で開きたい�
 | 画面からの再起動 | できない | 終了コード 75 → `Restart=on-failure` で起動し直す |
 | 落ちたとき | 止まったまま | 5 秒後に起動し直す（10 分に 5 回まで） |
 | 画面・API からの停止 | 止まったまま | 止まったまま（終了コード 0） |
-| `systemctl stop` | tmux に `stop` を送る | SIGTERM で Minecraft の終了処理が保存してから止まる（最大 180 秒） |
+| `systemctl stop` | tmux に `stop` を送る | `mc-stop.sh` が MC REST API の停止を呼び、保存して終わるのを待つ（最大 150 秒） |
 | コンソール | `tmux attach` | 見るのは `journalctl -u minecraft -f`、コマンドは画面の「コンソール」 |
 
-切り替えたら、画面の「再起動」→「すぐ」で試し、`systemctl show minecraft -p NRestarts` が 1 増えていれば systemd が起動し直しています。
+切り替えたら、画面の「再起動」→「すぐ」で試し、`systemctl show minecraft -p NRestarts` が 1 増えていれば systemd が起動し直しています。`systemctl stop minecraft` が数秒〜十数秒で終わり、`systemctl status` が `failed` ではなく `inactive (dead)` になることも確かめてください。
+
+### systemctl stop を SIGTERM 任せにしない理由
+
+Youer 26.2 は SIGTERM を受けると、終了処理がメインスレッドの外からプレイヤーの保存を待って固まります（ログに `Asynchronous Save Players! Blocking thread until it returns` が出たまま進まない）。ワールドも保存されないまま、`TimeoutStopSec` のあとに強制終了されます。
+
+そこで `ExecStop` の `mc-stop.sh` が、`config/mc_rest_api/tokens.json` の admin トークンで `POST /server/stop`（ゲーム内の `stop` と同じ通常の停止）を呼び、Java が終わるまで待ちます。API に繋がらないとき（起動の途中など）や 150 秒で終わらないときは、何もせずに systemd の SIGTERM に任せます。`Done` が出る前に止めると SIGTERM になるので、起動しきってから止めてください。
 
 > [!NOTE]
 > ハイブリッドサーバー（Bukkit との混成）では、停止のときに独自に Java を終わらせて終了コードが 0 になり、起動し直されないことがあります。そのときは `journalctl -u minecraft -n 100` を確認してください。

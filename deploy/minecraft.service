@@ -3,6 +3,7 @@
 # それを見た systemd（Restart=on-failure）が起動し直す。停止（終了コード 0）では起動し直さない。
 #
 # 置き場所: /etc/systemd/system/minecraft.service
+# 停止スクリプト: /opt/minecraft/mc-stop.sh（ExecStop から呼ぶ）
 # コンソール: journalctl -u minecraft -f で見る。コマンドは mc-server-manager の「コンソール」から送る
 
 [Unit]
@@ -21,7 +22,10 @@ ExecStart=/usr/bin/java -Xms2048M -Xmx2048M -jar /opt/minecraft/youer-26.2-99e08
 # 0 以外で終わったら起動し直す（75 = 画面からの再起動、それ以外 = 落ちたとき）
 Restart=on-failure
 RestartSec=5
-# systemctl stop は SIGTERM で止める。Minecraft の終了処理がワールドを保存してから終わり、終了コードは 143 になる
+# systemctl stop は MC REST API の stop（ゲーム内の stop と同じ）で止め、保存して終わるのを待つ。
+# Youer は SIGTERM だと終了処理が固まり、保存しないまま強制終了されるため。
+# スクリプトが API で止められなかったときだけ、systemd が SIGTERM を送る（終了コード 143）
+ExecStop=/bin/bash /opt/minecraft/mc-stop.sh $MAINPID
 SuccessExitStatus=143
 TimeoutStopSec=180
 # コンソール入力は使わない（tmux はやめる）
