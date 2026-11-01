@@ -1,0 +1,35 @@
+# Minecraft（Youer 26.2）を systemd で直接動かす設定。
+# mc-server-manager の「再起動」は MC REST API が終了コード 75 で Java を終わらせ、
+# それを見た systemd（Restart=on-failure）が起動し直す。停止（終了コード 0）では起動し直さない。
+#
+# 置き場所: /etc/systemd/system/minecraft.service
+# コンソール: journalctl -u minecraft -f で見る。コマンドは mc-server-manager の「コンソール」から送る
+
+[Unit]
+Description=Minecraft Server (Youer 26.2)
+After=network-online.target
+Wants=network-online.target
+# 落ちて起動し直すのを 10 分に 5 回まで。それを超えたら止まったままにする（壊れたまま繰り返さない）
+StartLimitIntervalSec=600
+StartLimitBurst=5
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/minecraft
+ExecStart=/usr/bin/java -Xms2048M -Xmx2048M -jar /opt/minecraft/youer-26.2-99e08069-server.jar nogui
+# 0 以外で終わったら起動し直す（75 = 画面からの再起動、それ以外 = 落ちたとき）
+Restart=on-failure
+RestartSec=5
+# systemctl stop は SIGTERM で止める。Minecraft の終了処理がワールドを保存してから終わり、終了コードは 143 になる
+SuccessExitStatus=143
+TimeoutStopSec=180
+# コンソール入力は使わない（tmux はやめる）
+StandardInput=null
+
+# root のままでも /usr・/boot・/etc には書けないようにする（Mod やファイル管理からの書き換えを防ぐ）
+ProtectSystem=full
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

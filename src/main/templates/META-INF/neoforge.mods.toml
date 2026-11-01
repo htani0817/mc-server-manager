@@ -1,0 +1,33 @@
+license="${mod_license}"
+
+[[mods]]
+modId="${mod_id}"
+version="${mod_version}"
+displayName="${mod_name}"
+authors="TANI"
+description='''
+サーバー管理の WebUI を、Minecraft サーバーの中から配信するサーバー専用 Mod。
+操作はすべて MC REST API を通して行う。
+'''
+
+[[dependencies.${mod_id}]]
+    modId="neoforge"
+    type="required"
+    versionRange="[${neo_version},)"
+    ordering="NONE"
+    side="SERVER"
+
+[[dependencies.${mod_id}]]
+    modId="minecraft"
+    type="required"
+    versionRange="${minecraft_version_range}"
+    ordering="NONE"
+    side="SERVER"
+
+# 画面の操作はすべて MC REST API に中継するので、無いと起動させない
+[[dependencies.${mod_id}]]
+    modId="mc_rest_api"
+    type="required"
+    versionRange="${rest_api_version_range}"
+    ordering="AFTER"
+    side="SERVER"
