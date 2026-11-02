@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
-import { Power, RefreshCw, RotateCcw, Save } from 'lucide-react'
-import { del, getManager, post, type MetricsData, type Performance, type PlayerSummary, type ServerInfo, type ServerStatus, type WorldInfo } from '../api'
-import { clearRestart, markRestart, useEvents, useNav, useQuery, type ServerEvent } from '../hooks'
+import { RefreshCw, Save } from 'lucide-react'
+import { getManager, post, type MetricsData, type Performance, type PlayerSummary, type ServerInfo, type ServerStatus, type WorldInfo } from '../api'
+import { useEvents, useNav, useQuery, type ServerEvent } from '../hooks'
 import { TickChart, type Sample } from '../components/TickChart'
 import { WorldClock } from '../components/WorldClock'
 import { plainMotd } from '../components/MotdEditor'
@@ -11,11 +11,7 @@ import {
   Card,
   Dot,
   Empty,
-  Field,
-  Input,
-  Modal,
   PageHead,
-  Select,
   Ticks,
   dimName,
   fmt2,
@@ -25,17 +21,7 @@ import {
   fmtTime,
   GAME_MODES,
   useAction,
-  useConfirm,
 } from '../ui'
-
-/** 再起動までの予告の選択肢（秒） */
-const RESTART_DELAYS: [number, string][] = [
-  [0, 'すぐ'],
-  [10, '10 秒後'],
-  [30, '30 秒後'],
-  [60, '1 分後'],
-  [300, '5 分後'],
-]
 
 /** 性能の取り直し間隔と、グラフに残す点の数（5 秒 × 72 = 6 分） */
 const PERF_INTERVAL = 5000
@@ -51,9 +37,7 @@ export function Dashboard() {
   const [samples, setSamples] = useState<Sample[]>([])
   const [feed, setFeed] = useState<ServerEvent[]>([])
   const run = useAction()
-  const confirm = useConfirm()
   const nav = useNav()
-  const [restartForm, setRestartForm] = useState<{ delay: number; message: string } | null>(null)
 
   // 開いた直後から線が出るよう、Mod が記録している直近 6 分を先に入れておく（最後の起動より前は使わない）
   useEffect(() => {
@@ -98,36 +82,6 @@ export function Dashboard() {
   const w = world.data
   const heapRatio = p ? p.memory.heapUsedBytes / p.memory.heapMaxBytes : 0
 
-  const stop = async () => {
-    const ok = await confirm({
-      title: 'サーバーを停止しますか',
-      body: '全員が切断されます。止めたあとは、この画面からは起動できません（SSH で systemctl start minecraft）。続けて使うときは「再起動」を使ってください。',
-      ok: '停止する',
-      danger: true,
-    })
-    if (ok) await run('停止を指示しました', () => post('/server/stop'))
-  }
-
-  const restart = async () => {
-    if (!restartForm) return
-    const { delay, message } = restartForm
-    const ok = await run(delay === 0 ? '再起動を始めました' : '再起動を予告しました', () =>
-      post('/server/restart', { delaySeconds: delay, ...(message.trim() ? { message: message.trim() } : {}) }),
-    )
-    if (ok) {
-      markRestart(Date.now() + delay * 1000)
-      setRestartForm(null)
-      status.reload()
-    }
-  }
-
-  const cancelRestart = async () => {
-    if (await run('再起動を取り消しました', () => del('/server/restart'))) {
-      clearRestart()
-      status.reload()
-    }
-  }
-
   return (
     <>
       <PageHead
@@ -155,50 +109,11 @@ export function Dashboard() {
               <RefreshCw size={16} strokeWidth={1.5} />
               再読み込み
             </Button>
-            <Button disabled={!!st?.restartAt} onClick={() => setRestartForm({ delay: 10, message: '' })}>
-              <RotateCcw size={16} strokeWidth={1.5} />
-              再起動
-            </Button>
-            <Button variant="danger" onClick={stop}>
-              <Power size={16} strokeWidth={1.5} />
-              停止
-            </Button>
           </>
         }
       />
 
-      <Modal open={restartForm !== null} onClose={() => setRestartForm(null)} title="サーバーを再起動">
-        {restartForm && (
-          <div className="stack" style={{ gap: 12, marginTop: 12 }}>
-            <Field label="予告" hint="チャットで残り時間を知らせてから止めます">
-              <Select value={String(restartForm.delay)} onChange={(e) => setRestartForm({ ...restartForm, delay: Number(e.target.value) })}>
-                {RESTART_DELAYS.map(([s, label]) => (
-                  <option key={s} value={s}>
-                    {label}
-                  </option>
-                ))}
-              </Select>
-            </Field>
-            <Field label="理由" hint="予告に添えます（空でもよい）">
-              <Input value={restartForm.message} maxLength={80} placeholder="Mod の更新" onChange={(e) => setRestartForm({ ...restartForm, message: e.target.value })} />
-            </Field>
-            <p className="muted" style={{ margin: 0, fontSize: 13 }}>
-              保存して止めたあと、systemd が起動し直します。立ち上がるまで、この画面も開けなくなります。戻ったら自動で読み込み直します。
-            </p>
-            <div className="dialog-actions" style={{ marginTop: 12 }}>
-              <Button variant="ghost" onClick={() => setRestartForm(null)}>
-                やめる
-              </Button>
-              <Button variant="primary" onClick={restart}>
-                再起動する
-              </Button>
-            </div>
-          </div>
-        )}
-      </Modal>
-
       <div className="stack" style={{ gap: 16 }}>
-        {st?.restartAt && <RestartNotice at={st.restartAt} onCancel={cancelRestart} />}
         <div className="grid grid-stats">
           <Card>
             <div className="stat-label">TPS</div>
@@ -418,30 +333,6 @@ export function FeedRow({ e }: { e: ServerEvent }) {
       </span>
       <span style={{ minWidth: 0, overflowWrap: 'anywhere' }}>{text}</span>
       {e.type === 'join' && <Dot state="on" />}
-    </div>
-  )
-}
-
-/** 予告中の再起動の残り時間と取り消し */
-function RestartNotice({ at, onCancel }: { at: string; onCancel: () => void }) {
-  const [now, setNow] = useState(Date.now())
-  useEffect(() => {
-    const id = window.setInterval(() => setNow(Date.now()), 1000)
-    return () => window.clearInterval(id)
-  }, [])
-  const left = Math.max(0, Math.round((new Date(at).getTime() - now) / 1000))
-  return (
-    <div className="notice" style={{ alignItems: 'center' }}>
-      <RotateCcw size={16} strokeWidth={1.5} style={{ marginTop: 0 }} />
-      <span>
-        {fmtTime(at, false)} に再起動します{left > 0 ? `（残り ${left} 秒）` : '（停止中）'}
-      </span>
-      <span style={{ flex: 1 }} />
-      {left > 0 && (
-        <Button size="sm" variant="ghost" onClick={onCancel}>
-          取り消す
-        </Button>
-      )}
     </div>
   )
 }

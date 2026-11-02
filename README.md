@@ -11,13 +11,13 @@ Minecraft サーバーの管理画面を、サーバーの中から配信する 
 - 入れる場所: サーバーだけ
 - **[MC REST API](https://github.com/htani0817/mc-rest-api) 1.2.0 以上が必要です。** 画面の操作はすべて MC REST API に中継します。入っていないとサーバーが起動しません
 - トークンは同じサーバーの `config/mc_rest_api/tokens.json` から admin のものを読みます。取り込みの作業は要りません
-- メトリクス・接続時間・再起動の予定は、この Mod が自分で記録・実行します（画面を閉じていても動きます）
+- メトリクス・接続時間・バックアップの予定は、この Mod が自分で記録・実行します（画面を閉じていても動きます）
 
 ## 画面
 
 | 画面 | 中身 |
 | --- | --- |
-| 概要 | TPS・人数・メモリ・CPU、ティック処理時間のグラフ、ワールド時刻の文字盤、オンライン一覧、リアルタイムの出来事、ディメンション別の負荷、ディスク。保存・再読み込み・再起動・停止 |
+| 概要 | TPS・人数・メモリ・CPU、ティック処理時間のグラフ、ワールド時刻の文字盤、オンライン一覧、リアルタイムの出来事、ディメンション別の負荷、ディスク。保存・再読み込み |
 | メトリクス | マシンと Minecraft の CPU・メモリ、Java ヒープ、ディスク、参加者、TPS、ティック処理時間のグラフ。1 時間〜30 日を切り替え |
 | ランキング | 接続時間のランキング。今日・7 日・30 日・今月・全期間・Minecraft の統計。CSV でダウンロード |
 | プレイヤー | 一覧、状態、ゲームモード、メッセージ、TP、体力などの変更、キック、OP・ホワイトリスト・BAN、持ち物とエンダーチェスト、アイテム、エフェクト、統計と進捗 |
@@ -27,7 +27,7 @@ Minecraft サーバーの管理画面を、サーバーの中から配信する 
 | スコア・データパック | スコアボード、チーム、データパック、Mod とプラグイン、レジストリ |
 | コンソール・チャット | 任意コマンド、サーバーログ、チャット |
 | ファイル | 一覧・編集・アップロード・ダウンロード・移動・コピー・削除 |
-| バックアップ | 作成・一覧・ダウンロード・削除。再起動の予定（曜日と時刻を決めて、バックアップを取ってから再起動） |
+| バックアップ | 作成・一覧・ダウンロード・削除。バックアップの予定（曜日と時刻を決めて、定期的にバックアップを作る） |
 | ログと履歴 | チャット・出来事・操作の記録・サーバーログを直近 7 日分ダウンロード |
 | API 一覧 | MC REST API の openapi.json |
 
@@ -35,7 +35,7 @@ Minecraft サーバーの管理画面を、サーバーの中から配信する 
 
 ## ログインはありません
 
-画面を開けた人は、任意のコマンド・ファイルの編集・停止まで全部できます。そのため、次の 3 つで「家の中から開いたときだけ」に絞っています。
+画面を開けた人は、任意のコマンドやファイルの編集まで全部できます。そのため、次の 3 つで「家の中から開いたときだけ」に絞っています。
 
 | 守り | 内容 |
 | --- | --- |
@@ -70,36 +70,9 @@ Tailscale の MagicDNS 名（`<マシン名>.tailXXXX.ts.net`）で開きたい�
 
 更新するときは、古い jar を消してから新しい jar を置きます（同じ Mod の jar が 2 つあると起動しません）。
 
-## 画面から再起動するには
+## サーバーの起動・停止
 
-画面の「再起動」は、MC REST API が終了コード 75 で Java を終わらせ、systemd がそれを見て起動し直す仕組みです。tmux の中で java を動かしていると、java が終わっても tmux が残るので systemd が気づかず、起動し直されません。java を systemd から直接動かしてください。設定の例は [deploy/minecraft.service](deploy/minecraft.service) と、停止に使う [deploy/mc-stop.sh](deploy/mc-stop.sh) です（jar 名・メモリ・場所は自分のサーバーに合わせて直します）。
-
-```bash
-cp minecraft.service /etc/systemd/system/minecraft.service
-cp mc-stop.sh /opt/minecraft/mc-stop.sh
-chmod 700 /opt/minecraft/mc-stop.sh
-systemctl daemon-reload
-```
-
-| | tmux の中で動かす | deploy/minecraft.service |
-| --- | --- | --- |
-| 動かし方 | `Type=forking`、tmux の中で `java` | `Type=simple`、`java` を直接 |
-| 画面からの再起動 | できない | 終了コード 75 → `Restart=on-failure` で起動し直す |
-| 落ちたとき | 止まったまま | 5 秒後に起動し直す（10 分に 5 回まで） |
-| 画面・API からの停止 | 止まったまま | 止まったまま（終了コード 0） |
-| `systemctl stop` | tmux に `stop` を送る | `mc-stop.sh` が MC REST API の停止を呼び、保存して終わるのを待つ（最大 150 秒） |
-| コンソール | `tmux attach` | 見るのは `journalctl -u minecraft -f`、コマンドは画面の「コンソール」 |
-
-切り替えたら、画面の「再起動」→「すぐ」で試し、`systemctl show minecraft -p NRestarts` が 1 増えていれば systemd が起動し直しています。`systemctl stop minecraft` が数秒〜十数秒で終わり、`systemctl status` が `failed` ではなく `inactive (dead)` になることも確かめてください。
-
-### systemctl stop を SIGTERM 任せにしない理由
-
-Youer 26.2 は SIGTERM を受けると、終了処理がメインスレッドの外からプレイヤーの保存を待って固まります（ログに `Asynchronous Save Players! Blocking thread until it returns` が出たまま進まない）。ワールドも保存されないまま、`TimeoutStopSec` のあとに強制終了されます。
-
-そこで `ExecStop` の `mc-stop.sh` が、`config/mc_rest_api/tokens.json` の admin トークンで `POST /server/stop`（ゲーム内の `stop` と同じ通常の停止）を呼び、Java が終わるまで待ちます。API に繋がらないとき（起動の途中など）や 150 秒で終わらないときは、何もせずに systemd の SIGTERM に任せます。`Done` が出る前に止めると SIGTERM になるので、起動しきってから止めてください。
-
-> [!NOTE]
-> ハイブリッドサーバー（Bukkit との混成）では、停止のときに独自に Java を終わらせて終了コードが 0 になり、起動し直されないことがあります。そのときは `journalctl -u minecraft -n 100` を確認してください。
+画面にはサーバーの再起動・停止のボタンはありません（1.2.0 で外しました）。起動・停止・再起動は、SSH で `systemctl` などを使ってください。
 
 ## メトリクス
 
@@ -122,12 +95,14 @@ Youer 26.2 は SIGTERM を受けると、終了処理がメインスレッドの
 
 参加から退出までを 1 行として `mc-server-manager/playtime/sessions.csv` に足していきます。接続中の人は 1 分ごとに記録するので、サーバーが落ちても次の起動で回収します（誤差 1 分以内）。数え始めはこの Mod を入れたときです。それより前の分は「Minecraft の統計」（ワールドの `play_time`）で見られます。
 
-## 再起動の予定
+## バックアップの予定
 
-バックアップ画面の「再起動の予定」で、曜日と時刻（サーバーの時間帯、8 個まで）を決めます。その時刻になると、MC REST API でバックアップを作り、成功したら予告を付けて再起動します。バックアップに失敗したら再起動しません。「いま実行」で同じ流れをすぐ試せます。
+バックアップ画面の「バックアップの予定」で、曜日と時刻（サーバーの時間帯、8 個まで）を決めます。その時刻になると、MC REST API でバックアップを作り、終わるまで待って結果を残します。サーバーは止めません。「いま実行」で同じ流れをすぐ試せます。
 
 - 時刻は 15 秒ごとに見るので、最大 15 秒遅れて始まります。止まっていたあいだに過ぎた時刻は、あとから実行しません
-- バックアップの保持数は MC REST API の `backupKeep` に従います
+- 画面からバックアップを作っている最中に時刻が来たときは、そのバックアップが終わるのを待って、それを今回の結果にします
+- バックアップの保持数は MC REST API の `backupKeep` に従います（予定で作ったものも数に入ります）
+- 1.1.0 の「再起動の予定」（`restart-schedule.json`）は読みません。1.2.0 に上げたら、画面で予定を決め直してください
 
 ## 設定（config/mc_server_manager/config.json）
 
@@ -144,22 +119,22 @@ Youer 26.2 は SIGTERM を受けると、終了処理がメインスレッドの
 | `metricsIntervalSeconds` | `10` | メトリクスを記録する間隔（秒） |
 | `metricsKeepDays` | `30` | メトリクスを残す日数 |
 
-再起動の予定は画面から変えます（`config/mc_server_manager/restart-schedule.json` に保存され、再起動しなくても効きます）。
+バックアップの予定は画面から変えます（`config/mc_server_manager/backup-schedule.json` に保存され、再起動しなくても効きます）。
 
 ## 置かれるもの
 
 | 場所 | 中身 |
 | --- | --- |
 | `config/mc_server_manager/config.json` | 設定 |
-| `config/mc_server_manager/restart-schedule.json` | 再起動の予定 |
+| `config/mc_server_manager/backup-schedule.json` | バックアップの予定 |
 | `logs/mc-server-manager/audit/audit-YYYY-MM-DD.log` | 画面から行った操作の記録（時刻・IP・メソッド・パス・結果）。直近 7 日分 |
 | `mc-server-manager/metrics/` | メトリクスと起動した時刻。直近 30 日分 |
 | `mc-server-manager/playtime/` | 接続の記録（参加・退出の時刻、UUID、名前） |
-| `mc-server-manager/restart-schedule-state.json` | 再起動の予定が最後に動いた結果 |
+| `mc-server-manager/backup-schedule-state.json` | バックアップの予定が最後に動いた結果 |
 
 ## 既知の制約
 
-- 画面は Minecraft サーバーの中で動くので、止めると画面も開けなくなります。停止したあとは SSH などで起動し直してください。続けて使うときは「再起動」を使います
+- 画面は Minecraft サーバーの中で動くので、サーバーを止めると画面も開けなくなります。起動・停止・再起動は SSH で `systemctl` を使ってください
 - 誰が操作したかは IP アドレスでしか分かりません
 - Minecraft のメモリ（RSS）とディスクの読み書きは Linux でだけ取れます
 

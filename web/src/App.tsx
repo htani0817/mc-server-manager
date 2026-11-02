@@ -19,7 +19,7 @@ import {
   Users,
 } from 'lucide-react'
 import { type ServerStatus } from './api'
-import { NavContext, usePath, useQuery, useRestarting } from './hooks'
+import { NavContext, usePath, useQuery } from './hooks'
 import { Button, ConfirmHost, Dot, Ticks, ToastHost } from './ui'
 import { Dashboard } from './pages/Dashboard'
 import { Players } from './pages/Players'
@@ -130,7 +130,6 @@ function Shell() {
   const ThemeIcon = theme === 'system' ? Monitor : theme === 'dark' ? Moon : SunMedium
   const st = status.data
   const apiDown = !!status.error
-  const restarting = useRestarting(st, apiDown)
 
   return (
     <NavContext.Provider value={navigate}>
@@ -172,8 +171,8 @@ function Shell() {
           <div className="sidebar-foot">
             <div className="server-chip">
               <div className="server-chip-row">
-                <Dot state={restarting ? 'wait' : apiDown ? 'off' : st?.ready ? 'on' : 'wait'} />
-                {restarting ? '再起動中' : apiDown ? 'サーバーに接続できません' : st?.restartAt ? '再起動の予告中' : st?.ready ? '稼働中' : '起動中'}
+                <Dot state={apiDown ? 'off' : st?.ready ? 'on' : 'wait'} />
+                {apiDown ? 'サーバーに接続できません' : st?.restartAt ? '再起動の予告中' : st?.ready ? '稼働中' : '起動中'}
                 {st && !apiDown && <span className="mono muted" style={{ marginLeft: 'auto' }}>{st.tps.toFixed(1)} TPS</span>}
               </div>
               {st && !apiDown && <Ticks tps={st.tps} target={st.targetTps} />}

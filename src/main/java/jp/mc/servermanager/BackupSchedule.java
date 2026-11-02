@@ -30,14 +30,11 @@ import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
 /**
- * 再起動の予定。決まった曜日・時刻になったら、MC REST API でバックアップを取り、終わってから再起動を予告する。
- * バックアップに失敗したときは再起動しない（壊れたまま止めて戻せなくなるのを避ける）。
- * 予定は config/mc_server_manager/restart-schedule.json、最後に動いた結果は mc-server-manager/restart-schedule-state.json。
+ * バックアップの予定。決まった曜日・時刻になったら、MC REST API でバックアップを取り、終わるまで待って結果を残す。
+ * 予定は config/mc_server_manager/backup-schedule.json、最後に動いた結果は mc-server-manager/backup-schedule-state.json。
  */
-public final class RestartSchedule {
+public final class BackupSchedule {
     private static final Pattern TIME = Pattern.compile("^([01]\\d|2[0-3]):[0-5]\\d$");
-    /** MC REST API の再起動で置ける最長の予告（秒） */
-    static final int MAX_DELAY = 600;
     private static final int MAX_TIMES = 8;
     /** バックアップを待つ最長の時間 */
     private static final Duration BACKUP_TIMEOUT = Duration.ofHours(3);
@@ -49,10 +46,6 @@ public final class RestartSchedule {
         public List<Integer> days = new ArrayList<>(List.of(1, 2, 3, 4, 5, 6, 7));
         /** 時刻（HH:MM、サーバーの時間帯） */
         public List<String> times = new ArrayList<>(List.of("05:00"));
-        /** バックアップのあと、再起動まで予告する秒数 */
-        public int delaySeconds = 60;
-        /** 予告に添える理由 */
-        public String message = "定期再起動";
     }
 
     private final Path settingsFile;
@@ -70,11 +63,10 @@ public final class RestartSchedule {
     });
     private Settings settings;
     private ZonedDateTime next;
-    private volatile String phase;
     private volatile Instant runningSince;
     private Map<String, Object> lastRun;
 
-    public RestartSchedule(Path settingsFile, Path stateFile, RestApiLink link, Audit audit) {
+    public BackupSchedule(Path settingsFile, Path stateFile, RestApiLink link, Audit audit) {
         this.settingsFile = settingsFile;
         this.stateFile = stateFile;
         this.link = link;
@@ -88,7 +80,7 @@ public final class RestartSchedule {
         // 時刻の判定は 15 秒ごと。予定の時刻から最大 15 秒遅れて始まる
         timer.scheduleAtFixedRate(this::check, 15, 15, TimeUnit.SECONDS);
         if (settings.enabled) {
-            McServerManager.LOGGER.info("[mc-server-manager] 次の定期再起動: {}", next);
+            McServerManager.LOGGER.info("[mc-server-manager] 次の定期バックアップ: {}", next);
         }
     }
 
@@ -106,7 +98,7 @@ public final class RestartSchedule {
             next = nextAfter(settings, ZonedDateTime.now());
             runningSince = Instant.now();
         }
-        McServerManager.LOGGER.info("[mc-server-manager] 定期再起動の時刻（{}）になりました。バックアップを始めます", run.toLocalTime());
+        McServerManager.LOGGER.info("[mc-server-manager] 定期バックアップの時刻（{}）になりました", run.toLocalTime());
         execute("schedule");
     }
 
@@ -122,7 +114,7 @@ public final class RestartSchedule {
         return true;
     }
 
-    // ---- 実行（バックアップ → 再起動） ----
+    // ---- 実行 ----
 
     /** 呼ぶ前に runningSince を入れておく（同時に 2 つ動かないように） */
     private void execute(String trigger) {
@@ -131,34 +123,16 @@ public final class RestartSchedule {
         String detail = null;
         String backupFile = null;
         try {
-            phase = "checking";
-            JsonObject status = call("GET", "/api/v1/server/status", null).getAsJsonObject();
-            if (status.has("restartAt") && !status.get("restartAt").isJsonNull()) {
-                result = "skipped";
-                detail = "もう再起動を予告していたので、何もしませんでした";
+            JsonObject job = startBackup();
+            job = waitBackup(job.get("id").getAsString());
+            backupFile = job.has("file") && !job.get("file").isJsonNull() ? job.get("file").getAsString() : null;
+            if ("done".equals(job.get("state").getAsString())) {
+                result = "done";
+                McServerManager.LOGGER.info("[mc-server-manager] 定期バックアップ {} を作りました", backupFile);
             } else {
-                phase = "backup";
-                JsonObject job = startBackup();
-                job = waitBackup(job.get("id").getAsString());
-                backupFile = job.has("file") && !job.get("file").isJsonNull() ? job.get("file").getAsString() : null;
-                if (!"done".equals(job.get("state").getAsString())) {
-                    result = "backup_failed";
-                    detail = job.has("error") && !job.get("error").isJsonNull() ? job.get("error").getAsString() : "バックアップが終わりませんでした";
-                    McServerManager.LOGGER.error("[mc-server-manager] バックアップに失敗したので、定期再起動はしません: {}", detail);
-                } else {
-                    phase = "restart";
-                    Settings s = settings();
-                    JsonObject body = new JsonObject();
-                    body.addProperty("delaySeconds", s.delaySeconds);
-                    if (s.message != null && !s.message.isBlank()) {
-                        body.addProperty("message", s.message.trim());
-                    }
-                    result = "restart_scheduled";
-                    // 先に結果を書いておく（再起動で Java が終わるので、あとからは書けない）
-                    saveState(record(trigger, started, result, null, backupFile));
-                    call("POST", "/api/v1/server/restart", body.toString());
-                    McServerManager.LOGGER.info("[mc-server-manager] バックアップ {} を作ったので、{} 秒後の再起動を予告しました", backupFile, s.delaySeconds);
-                }
+                result = "backup_failed";
+                detail = job.has("error") && !job.get("error").isJsonNull() ? job.get("error").getAsString() : "バックアップが終わりませんでした";
+                McServerManager.LOGGER.error("[mc-server-manager] 定期バックアップに失敗しました: {}", detail);
             }
         } catch (Exception e) {
             if (e instanceof InterruptedException) {
@@ -166,9 +140,8 @@ public final class RestartSchedule {
             }
             result = "error";
             detail = e.getMessage() == null ? e.toString() : e.getMessage();
-            McServerManager.LOGGER.error("[mc-server-manager] 定期再起動を進められませんでした: {}", detail);
+            McServerManager.LOGGER.error("[mc-server-manager] 定期バックアップを進められませんでした: {}", detail);
         } finally {
-            phase = null;
             synchronized (this) {
                 runningSince = null;
             }
@@ -266,7 +239,7 @@ public final class RestartSchedule {
             Files.createDirectories(stateFile.getParent());
             Files.writeString(stateFile, ManagerConfig.GSON.toJson(run) + "\n", StandardCharsets.UTF_8);
         } catch (IOException e) {
-            McServerManager.LOGGER.warn("[mc-server-manager] 定期再起動の結果を書けませんでした: {}", e.toString());
+            McServerManager.LOGGER.warn("[mc-server-manager] 定期バックアップの結果を書けませんでした: {}", e.toString());
         }
     }
 
@@ -292,7 +265,6 @@ public final class RestartSchedule {
         m.put("timezone", ZoneId.systemDefault().getId());
         m.put("nextRunAt", settings.enabled && next != null ? next.toInstant().toString() : null);
         m.put("running", runningSince != null);
-        m.put("phase", phase);
         m.put("runningSince", runningSince == null ? null : runningSince.toString());
         m.put("lastRun", lastRun);
         return m;
@@ -306,7 +278,7 @@ public final class RestartSchedule {
         Files.writeString(settingsFile, ManagerConfig.GSON.toJson(s) + "\n", StandardCharsets.UTF_8);
         settings = s;
         next = nextAfter(s, ZonedDateTime.now());
-        McServerManager.LOGGER.info("[mc-server-manager] 定期再起動の予定を変えました（{}、次は {}）", s.enabled ? "有効" : "無効", s.enabled ? next : "なし");
+        McServerManager.LOGGER.info("[mc-server-manager] 定期バックアップの予定を変えました（{}、次は {}）", s.enabled ? "有効" : "無効", s.enabled ? next : "なし");
     }
 
     static void validate(Settings s) {
@@ -338,16 +310,6 @@ public final class RestartSchedule {
         }
         if (s.enabled && (days.isEmpty() || times.isEmpty())) {
             throw new IllegalArgumentException("有効にするときは、曜日と時刻を 1 つ以上選んでください");
-        }
-        if (s.delaySeconds < 0 || s.delaySeconds > MAX_DELAY) {
-            throw new IllegalArgumentException("予告は 0〜" + MAX_DELAY + " 秒で指定してください");
-        }
-        if (s.message == null) {
-            s.message = "";
-        }
-        s.message = s.message.trim();
-        if (s.message.length() > 80 || s.message.contains("\n") || s.message.contains("\r")) {
-            throw new IllegalArgumentException("理由は 1 行・80 文字までです");
         }
         s.days = new ArrayList<>(days);
         s.times = new ArrayList<>(times);
@@ -385,7 +347,7 @@ public final class RestartSchedule {
                 s = ManagerConfig.GSON.fromJson(Files.readString(file, StandardCharsets.UTF_8), Settings.class);
                 validate(s);
             } catch (IOException | RuntimeException e) {
-                McServerManager.LOGGER.error("[mc-server-manager] {} を読めないので、定期再起動は止めておきます: {}", file, e.getMessage());
+                McServerManager.LOGGER.error("[mc-server-manager] {} を読めないので、定期バックアップは止めておきます: {}", file, e.getMessage());
                 s = new Settings();
             }
         }

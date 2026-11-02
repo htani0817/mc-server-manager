@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react'
-import { get, post, q, type ServerStatus } from './api'
+import { get, post, q } from './api'
 
 /** GET を呼んで結果を持つ。interval（ミリ秒）を渡すと定期的に取り直す。fetcher を替えると /manager も呼べる */
 export function useQuery<T>(path: string | null, interval?: number, fetcher: (path: string) => Promise<T> = get<T>) {
@@ -104,58 +104,6 @@ export function useEvents(types: EventType[], onEvent: (e: ServerEvent) => void,
   }, [key, enabled])
 
   return connected
-}
-
-// ---- 再起動の見守り ----
-
-const RESTART_KEY = 'mc-server-manager-restart'
-
-function readRestart(): number | null {
-  try {
-    const v = sessionStorage.getItem(RESTART_KEY)
-    return v ? Number(v) : null
-  } catch {
-    return null
-  }
-}
-
-/** 再起動を頼んだことを覚える（止まる予定の時刻、ミリ秒） */
-export function markRestart(stopAt: number) {
-  try {
-    sessionStorage.setItem(RESTART_KEY, String(stopAt))
-  } catch {
-    // 覚えられなくても再起動はする。表示が「接続できません」になるだけ
-  }
-}
-
-export function clearRestart() {
-  try {
-    sessionStorage.removeItem(RESTART_KEY)
-  } catch {
-    // 何もしない
-  }
-}
-
-/**
- * 再起動を頼んだあと、サーバーにつながらないあいだ true。
- * 立ち上がり直したら画面を読み込み直す（jar が新しくなっていれば画面も新しくなる）。
- */
-export function useRestarting(status: ServerStatus | undefined, down: boolean): boolean {
-  const stopAt = readRestart()
-  useEffect(() => {
-    if (stopAt === null) return
-    const now = Date.now()
-    if (now - stopAt > 15 * 60_000) {
-      // 15 分たっても戻らないときは見守りをやめる
-      clearRestart()
-      return
-    }
-    if (!down && status && now > stopAt && status.uptimeSeconds * 1000 < now - stopAt + 5000) {
-      clearRestart()
-      window.location.reload()
-    }
-  }, [status, down, stopAt])
-  return stopAt !== null && down
 }
 
 // ---- 画面遷移（history API だけの小さなルーター） ----
