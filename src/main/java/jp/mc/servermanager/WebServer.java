@@ -61,7 +61,7 @@ public final class WebServer {
     private final Audit audit;
     private final Metrics metrics;
     private final Playtime playtime;
-    private final RestartSchedule schedule;
+    private final BackupSchedule schedule;
     private final HttpClient client;
     /** 画面のファイルは jar から一度読んだら覚えておく（無いものは空で覚える） */
     private final Map<String, Optional<byte[]>> assets = new ConcurrentHashMap<>();
@@ -69,7 +69,7 @@ public final class WebServer {
     private ExecutorService executor;
 
     public WebServer(ManagerConfig config, AccessGuard guard, RestApiLink link, Audit audit,
-                     Metrics metrics, Playtime playtime, RestartSchedule schedule) {
+                     Metrics metrics, Playtime playtime, BackupSchedule schedule) {
         this.config = config;
         this.guard = guard;
         this.link = link;
@@ -288,7 +288,7 @@ public final class WebServer {
             json(ex, 200, Map.of("data", r));
             return;
         }
-        if (path.equals("/manager/schedule")) {
+        if (path.equals("/manager/backup-schedule")) {
             json(ex, 200, Map.of("data", schedule.view()));
             return;
         }
@@ -334,7 +334,7 @@ public final class WebServer {
 
     /** 予定の保存といま実行。返した状態コードを操作の記録に残す */
     private int localWrite(HttpExchange ex, String method, String path) throws IOException {
-        if (path.equals("/manager/schedule") && method.equals("PUT")) {
+        if (path.equals("/manager/backup-schedule") && method.equals("PUT")) {
             byte[] raw = ex.getRequestBody().readNBytes(64 * 1024);
             try {
                 schedule.update(JsonParser.parseString(new String(raw, StandardCharsets.UTF_8)).getAsJsonObject());
@@ -345,7 +345,7 @@ public final class WebServer {
             json(ex, 200, Map.of("data", schedule.view()));
             return 200;
         }
-        if (path.equals("/manager/schedule/run") && method.equals("POST")) {
+        if (path.equals("/manager/backup-schedule/run") && method.equals("POST")) {
             if (!schedule.runNow()) {
                 json(ex, 409, error("running", "もう実行中です"));
                 return 409;

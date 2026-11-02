@@ -20,7 +20,7 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * 管理 WebUI を Minecraft サーバーの中から配信する。画面の操作は MC REST API に中継する。
- * メトリクスと接続時間はこの Mod が自分で記録し、定期再起動もこの Mod が時刻を見て行う。
+ * メトリクスと接続時間はこの Mod が自分で記録し、定期バックアップもこの Mod が時刻を見て行う。
  */
 @Mod(value = McServerManager.MODID, dist = Dist.DEDICATED_SERVER)
 public class McServerManager {
@@ -32,7 +32,7 @@ public class McServerManager {
     private Audit audit;
     private Metrics metrics;
     private Playtime playtime;
-    private RestartSchedule schedule;
+    private BackupSchedule schedule;
     private ScheduledExecutorService recorder;
 
     public McServerManager() {
@@ -53,7 +53,7 @@ public class McServerManager {
             return;
         }
         Path gameDir = FMLPaths.GAMEDIR.get();
-        // 止めても消えないデータ（メトリクス・接続時間・定期再起動の結果）の置き場
+        // 止めても消えないデータ（メトリクス・接続時間・定期バックアップの結果）の置き場
         Path dataDir = gameDir.resolve("mc-server-manager");
         try {
             audit = new Audit(gameDir.resolve("logs").resolve("mc-server-manager").resolve("audit"), config.historyKeepDays);
@@ -81,8 +81,8 @@ public class McServerManager {
         }
         try {
             RestApiLink link = new RestApiLink(FMLPaths.CONFIGDIR.get().resolve("mc_rest_api"), config.restApiBase);
-            schedule = new RestartSchedule(FMLPaths.CONFIGDIR.get().resolve(MODID).resolve("restart-schedule.json"),
-                    dataDir.resolve("restart-schedule-state.json"), link, audit);
+            schedule = new BackupSchedule(FMLPaths.CONFIGDIR.get().resolve(MODID).resolve("backup-schedule.json"),
+                    dataDir.resolve("backup-schedule-state.json"), link, audit);
             schedule.start();
             AccessGuard guard = AccessGuard.of(config.allowedNetworks, config.allowedHosts);
             web = new WebServer(config, guard, link, audit, metrics, playtime, schedule);

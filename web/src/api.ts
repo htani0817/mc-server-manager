@@ -374,28 +374,25 @@ export interface Ranking {
   players: RankingRow[]
 }
 
-export interface RestartScheduleSettings {
+export interface BackupScheduleSettings {
   enabled: boolean
   /** 1=月〜7=日 */
   days: number[]
   /** HH:MM */
   times: string[]
-  delaySeconds: number
-  message: string
 }
 
-export interface RestartScheduleView {
-  settings: RestartScheduleSettings
+export interface BackupScheduleView {
+  settings: BackupScheduleSettings
   timezone: string
   nextRunAt: string | null
   running: boolean
-  phase: 'checking' | 'backup' | 'restart' | null
   runningSince: string | null
   lastRun: {
     trigger: 'schedule' | 'manual'
     startedAt: string
     finishedAt: string
-    result: 'restart_scheduled' | 'backup_failed' | 'skipped' | 'error'
+    result: 'done' | 'backup_failed' | 'error'
     detail: string | null
     backupFile: string | null
   } | null

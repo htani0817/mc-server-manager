@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { Info } from 'lucide-react'
 import { del, download, enc, get, post, type BackupJob } from '../api'
 import { useQuery } from '../hooks'
-import { RestartScheduleCard } from '../components/RestartScheduleCard'
+import { BackupScheduleCard } from '../components/BackupScheduleCard'
 import { Button, Card, Dot, Empty, PageHead, fmtBytes, fmtInt, fmtTime, useAction, useConfirm } from '../ui'
 
 interface BackupList {
@@ -129,7 +129,7 @@ export function Backups() {
             )}
           </Card>
           <div className="stack">
-            <RestartScheduleCard onRan={reloadAll} />
+            <BackupScheduleCard onRan={reloadAll} />
             <Card title="最近のジョブ" flush>
               {jobs.data?.length ? (
                 <table className="table">
