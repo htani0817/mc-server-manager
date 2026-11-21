@@ -9,7 +9,7 @@ Minecraft サーバーの管理画面を、サーバーの中から配信する 
 
 - 対象: Minecraft 26.3 / NeoForge 26.3.0.102 以降（Minecraft 26.2 で使う場合は [v1.2.0](https://github.com/htani0817/mc-server-manager/releases/tag/v1.2.0) を使ってください）
 - 入れる場所: サーバーだけ
-- **[MC REST API](https://github.com/htani0817/mc-rest-api) 1.3.0 以上（26.3 用）が必要です。** 画面の操作はすべて MC REST API に中継します。入っていないとサーバーが起動しません
+- **[MC REST API](https://github.com/htani0817/mc-rest-api) 26.3 用の 1.0.0 以上が必要です。** 画面の操作はすべて MC REST API に中継します。入っていないとサーバーが起動しません
 - トークンは同じサーバーの `config/mc_rest_api/tokens.json` から admin のものを読みます。取り込みの作業は要りません
 - メトリクス・接続時間・バックアップの予定は、この Mod が自分で記録・実行します（画面を閉じていても動きます）
 
@@ -58,7 +58,7 @@ Tailscale の MagicDNS 名（`<マシン名>.tailXXXX.ts.net`）で開きたい�
 
 ## 導入
 
-前提: [MC REST API](https://github.com/htani0817/mc-rest-api) 1.3.0 以上（26.3 用）が入った Minecraft サーバー。
+前提: [MC REST API](https://github.com/htani0817/mc-rest-api) 26.3 用の 1.0.0 以上が入った Minecraft サーバー。
 
 1. [Releases](https://github.com/htani0817/mc-server-manager/releases/latest) から `mc-server-manager-<版>+mc26.3-neoforge.jar` をダウンロードし、サーバーの `mods/` に置きます
 2. サーバーを起動（再起動）します。ログに次の行が出れば動いています
@@ -80,7 +80,7 @@ Tailscale の MagicDNS 名（`<マシン名>.tailXXXX.ts.net`）で開きたい�
 
 ## サーバーの起動・停止
 
-画面にはサーバーの再起動・停止のボタンはありません（1.2.0 で外しました）。起動・停止・再起動は、SSH で `systemctl` などを使ってください。
+画面にはサーバーの再起動・停止のボタンはありません（26.2 用の 1.2.0 で外しました）。起動・停止・再起動は、SSH で `systemctl` などを使ってください。
 
 ## メトリクス
 
@@ -110,7 +110,7 @@ Tailscale の MagicDNS 名（`<マシン名>.tailXXXX.ts.net`）で開きたい�
 - 時刻は 15 秒ごとに見るので、最大 15 秒遅れて始まります。止まっていたあいだに過ぎた時刻は、あとから実行しません
 - 画面からバックアップを作っている最中に時刻が来たときは、そのバックアップが終わるのを待って、それを今回の結果にします
 - バックアップの保持数は MC REST API の `backupKeep` に従います（予定で作ったものも数に入ります）
-- 1.1.0 の「再起動の予定」（`restart-schedule.json`）は読みません。1.2.0 に上げたら、画面で予定を決め直してください
+- 26.2 用の 1.1.0 の「再起動の予定」（`restart-schedule.json`）は読みません。そこから上げたときは、画面で予定を決め直してください
 
 ## 設定（config/mc_server_manager/config.json）
 

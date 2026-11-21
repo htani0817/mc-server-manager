@@ -94,7 +94,7 @@ tasks.named('processResources', ProcessResources) {
     }
 }
 
-// jar 名: mc-server-manager-1.3.0+mc26.3-neoforge.jar
+// jar 名: mc-server-manager-1.0.0+mc26.3-neoforge.jar
 tasks.named('jar', Jar) {
     archiveFileName = "mc-server-manager-${mod_version}+mc${minecraft_version}-neoforge.jar"
     // 配布する jar にもライセンス（と同梱ライブラリのライセンス）を入れる
