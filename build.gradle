@@ -19,7 +19,7 @@ base {
     archivesName = 'mc-server-manager'
 }
 
-// 26.2 は Java 25 で動くので Java 25 でビルドする（JDK は foojay が自動取得する）
+// 26.3 も Java 25 で動くので Java 25 でビルドする（JDK は foojay が自動取得する）
 java.toolchain.languageVersion = JavaLanguageVersion.of(25)
 
 neoForge {
@@ -94,7 +94,7 @@ tasks.named('processResources', ProcessResources) {
     }
 }
 
-// jar 名: mc-server-manager-1.0.0+mc26.2-neoforge.jar
+// jar 名: mc-server-manager-1.3.0+mc26.3-neoforge.jar
 tasks.named('jar', Jar) {
     archiveFileName = "mc-server-manager-${mod_version}+mc${minecraft_version}-neoforge.jar"
     // 配布する jar にもライセンス（と同梱ライブラリのライセンス）を入れる
@@ -113,7 +113,8 @@ tasks.named('build') {
 // 開発用サーバーの mods/ に、隣のプロジェクトでビルドした MC REST API の jar を入れる
 var installRestApi = tasks.register('installRestApi', Sync) {
     from(layout.projectDirectory.dir('../mc-rest-api/dist')) {
-        include 'mc-rest-api-*.jar'
+        // dist には前の Minecraft 版の jar も残るので、同じ版のものだけ入れる
+        include "mc-rest-api-*+mc${minecraft_version}-neoforge.jar"
     }
     into layout.buildDirectory.dir('runs/server/mods')
 }
