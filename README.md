@@ -1,19 +1,27 @@
 # mc-server-manager
 
-Minecraft サーバーの管理画面を、サーバーの中から配信する NeoForge 26.2 のサーバー専用 Mod です。`mods/` に jar を置くだけで、ブラウザで `http://<サーバーのIP>:8080/` を開くと、状態とメトリクスを見て、プレイヤー・ワールド・設定・ファイル・バックアップを操作できます。別のプロセスを立てる必要はありません。
+Minecraft サーバーの管理画面を、サーバーの中から配信する NeoForge 26.3 のサーバー専用 Mod です。`mods/` に jar を置くだけで、ブラウザで `http://<サーバーのIP>:8080/` を開くと、状態とメトリクスを見て、プレイヤー・ワールド・設定・ファイル・バックアップを操作できます。別のプロセスを立てる必要はありません。
 
 ```text
 ブラウザ ──> mc-server-manager（Mod, :8080） ──(admin トークン)──> MC REST API（Mod, 127.0.0.1:8765）
              └────────── 同じ Minecraft サーバーの中 ──────────┘
 ```
 
-- 対象: Minecraft 26.2 / NeoForge 26.2.0.88 以降
+- 対象: Minecraft 26.3 / NeoForge 26.3.0.102 以降（Minecraft 26.2 で使う場合は [v1.2.0](https://github.com/htani0817/mc-server-manager/releases/tag/v1.2.0) を使ってください）
 - 入れる場所: サーバーだけ
-- **[MC REST API](https://github.com/htani0817/mc-rest-api) 1.2.0 以上が必要です。** 画面の操作はすべて MC REST API に中継します。入っていないとサーバーが起動しません
+- **[MC REST API](https://github.com/htani0817/mc-rest-api) 1.3.0 以上（26.3 用）が必要です。** 画面の操作はすべて MC REST API に中継します。入っていないとサーバーが起動しません
 - トークンは同じサーバーの `config/mc_rest_api/tokens.json` から admin のものを読みます。取り込みの作業は要りません
 - メトリクス・接続時間・バックアップの予定は、この Mod が自分で記録・実行します（画面を閉じていても動きます）
 
 ## 画面
+
+![概要](images/manager-overview.png)
+
+| メトリクス | プレイヤー |
+| --- | --- |
+| ![メトリクス](images/manager-metrics.png) | ![プレイヤー](images/manager-players.png) |
+
+ブラウザの設定に合わせてライトにもなります（[ライトの概要](images/manager-overview-light.png)）。
 
 | 画面 | 中身 |
 | --- | --- |
@@ -50,9 +58,9 @@ Tailscale の MagicDNS 名（`<マシン名>.tailXXXX.ts.net`）で開きたい�
 
 ## 導入
 
-前提: [MC REST API](https://github.com/htani0817/mc-rest-api) 1.2.0 以上が入った Minecraft サーバー。
+前提: [MC REST API](https://github.com/htani0817/mc-rest-api) 1.3.0 以上（26.3 用）が入った Minecraft サーバー。
 
-1. [Releases](https://github.com/htani0817/mc-server-manager/releases/latest) から `mc-server-manager-<版>+mc26.2-neoforge.jar` をダウンロードし、サーバーの `mods/` に置きます
+1. [Releases](https://github.com/htani0817/mc-server-manager/releases/latest) から `mc-server-manager-<版>+mc26.3-neoforge.jar` をダウンロードし、サーバーの `mods/` に置きます
 2. サーバーを起動（再起動）します。ログに次の行が出れば動いています
 
    ```text
